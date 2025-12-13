@@ -38,7 +38,7 @@ This full stack appointment booking system can be used by a doctor or a hospital
 <br /><hr /><br />
 
 ## Author :black_nib:
-- _[NIYIBIZI Elysée](https://linktr.ee/niyibizi_elysee)👨🏿‍💻 | [Github](https://github.com/elyse502) | [Linkedin](https://www.linkedin.com/in/niyibizi-elys%C3%A9e/) | [Twitter](https://twitter.com/Niyibizi_Elyse)._
+- _[Dheeraj](https://www.linkedin.com/in/dheeraj-kumar-304846258/)👨🏿‍💻 | [Github](https://github.com/dheerajkr-8709) | [Linkedin](https://www.linkedin.com/in/dheeraj-kumar-304846258/) | [Twitter]()._
 
 <!--I'm [Elysée NIYIBIZI](https://elyseeniyibizi.me/) 👋
 
