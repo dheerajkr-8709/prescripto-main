@@ -1,6 +1,6 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import "dotenv/config";
 import connectDB from "./config/mongodb.js";
 import connectCloudinary from "./config/cloudinary.js";
 import adminRouter from "./routes/adminRoute.js";
@@ -10,12 +10,17 @@ import userRouter from "./routes/userRoute.js";
 // app config
 const app = express();
 const port = process.env.PORT || 4000;
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is missing in environment variables!");
+}
+console.log("JWT_SECRET:", process.env.JWT_SECRET);
 connectDB();
 connectCloudinary();
 
 // middlewares
 app.use(express.json());
-app.use(cors());
+app.use(cors()); // In production, you might want to restrict this to your frontend URL
 
 // api endpoints
 app.use("/api/admin", adminRouter);

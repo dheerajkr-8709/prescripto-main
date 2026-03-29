@@ -1,10 +1,11 @@
 import validator from "validator";
-import bycrypt from "bcrypt";
+import bcrypt from "bcrypt";
 import userModel from "../models/userModel.js";
 import jwt from "jsonwebtoken";
 import { v2 as cloudinary } from "cloudinary";
 import doctorModel from "../models/doctorModel.js";
 import appointmentModel from "../models/appointmentModel.js";
+import razorpay from "razorpay";
 
 // API to register user
 const registerUser = async (req, res) => {
@@ -25,9 +26,21 @@ const registerUser = async (req, res) => {
       return res.json({ success: false, message: "enter a strong password" });
     }
 
+    // checking for existing user
+    console.log("Checking existing user...");
+    const existingUser = await userModel.findOne({ email });
+    console.log("User exists:", existingUser);
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "User already exists",
+      });
+    }
+
     // hashing user password
-    const salt = await bycrypt.genSalt(10);
-    const hashedPassword = await bycrypt.hash(password, salt);
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const userData = {
       name,
@@ -38,12 +51,25 @@ const registerUser = async (req, res) => {
     const newUser = new userModel(userData);
     const user = await newUser.save();
 
-    const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET);
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET || "fallback_secret"
+    );
 
-    res.json({ success: true, token });
+    res.json({
+      success: true,
+      token,
+      user: { name: user.name, email: user.email },
+    });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: error.message });
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
+      });
+    }
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -57,10 +83,13 @@ const loginUser = async (req, res) => {
       return res.json({ success: false, message: "User does not exist" });
     }
 
-    const isMatch = await bycrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (isMatch) {
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+      const token = jwt.sign(
+        { id: user._id },
+        process.env.JWT_SECRET || "fallback_secret"
+      );
       res.json({ success: true, token });
     } else {
       res.json({ success: false, message: "Invalid credentials" });
@@ -94,10 +123,17 @@ const updateProfile = async (req, res) => {
       return res.json({ success: false, message: "Data Missing" });
     }
 
+    let addressData;
+    try {
+      addressData = JSON.parse(address);
+    } catch (e) {
+      addressData = address; // already an object or malformed string
+    }
+
     await userModel.findByIdAndUpdate(userId, {
       name,
       phone,
-      address: JSON.parse(address),
+      address: addressData,
       dob,
       gender,
     });
@@ -222,6 +258,59 @@ const cancelAppointment = async (req, res) => {
   }
 };
 
+// API to make payment of appointment using razorpay
+const paymentRazorpay = async (req, res) => {
+  try {
+    const { appointmentId } = req.body;
+    const appointmentData = await appointmentModel.findById(appointmentId);
+
+    if (!appointmentData || appointmentData.cancelled) {
+      return res.json({
+        success: false,
+        message: "Appointment Cancelled or not found",
+      });
+    }
+
+    const razorpayInstance = new razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
+    const options = {
+      amount: appointmentData.amount * 100,
+      currency: process.env.CURRENCY,
+      receipt: appointmentId,
+    };
+
+    const order = await razorpayInstance.orders.create(options);
+
+    res.json({ success: true, order });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// API to verify payment
+const verifyRazorpay = async (req, res) => {
+  try {
+    const { razorpay_order_id } = req.body;
+    const orderInfo = await razorpayInstance.orders.fetch(razorpay_order_id);
+
+    if (orderInfo.status === "paid") {
+      await appointmentModel.findByIdAndUpdate(orderInfo.receipt, {
+        payment: true,
+      });
+      res.json({ success: true, message: "Payment Successful" });
+    } else {
+      res.json({ success: false, message: "Payment Failed" });
+    }
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
 export {
   registerUser,
   loginUser,
@@ -230,4 +319,6 @@ export {
   bookAppointment,
   listAppointment,
   cancelAppointment,
+  paymentRazorpay,
+  verifyRazorpay,
 };
